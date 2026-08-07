@@ -77,8 +77,8 @@ Items follow same formatting as audio files in Book view.
 
 ### Options menu
 
- - 
- - 
+ - (blank)
+ - (blank)
  - Clear
 
  Clears the recents list
@@ -101,8 +101,8 @@ Items follow same formatting as audio files in Book view.
 
 ### Options menu
 
- - 
- - 
+ - (blank)
+ - (blank)
  - Clear
 
  Clears the queue
@@ -196,3 +196,11 @@ Current folders to be used as sources are shown in a list.
 - Remove
 
   Removes the focused source
+
+- (blank)
+
+## Updates to be performed after first build
+
+- On app open, if app opens to Player view, track should be paused.
+- Options menu implementation incorrect. Three options menu items (some blank) are provided for the options menu across the bottom of the screen. On Sonim XP3Plus devices this appears as three slots that are mapped to three corresponding softkeys below the screen. The correct presentation is the pre-Honeycomb "icon menu" presentation where items appear as a bottom bar rather than a popup menu. The first option is mapped to KEY\_MENU (139), second to KEY\_HOME (102), third to KEY\_CLEAR (355). While the options menu items do work in the current implementation, they are appearing as a pop-up menu when KEY\_MENU is pressed rather than being arranged into the three slots of the option menu and activatable with the corresponding softkeys.
+- Titles are often too long to be displayed in the lists. On focus of a list item that represents an audio file, the title field should change from being truncated with ... to a marquee.
