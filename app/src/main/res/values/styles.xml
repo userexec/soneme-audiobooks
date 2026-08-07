@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Soneme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#4F6F8F</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:statusBarColor">#1F2B38</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="SonemeTab">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:focusable">true</item>
+        <item name="android:focusableInTouchMode">true</item>
+        <item name="android:textColor">#1A1A1A</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>
