@@ -48,10 +48,15 @@ Audio files are represented by their metadata Title if present, or filename if n
 ### Options menu
 
  - Sources
+
    Opens Sources view
+   
  - Refresh
+
    Re-scans sources for new files
+
  - Queue
+
    Adds selected audio file to the Queue. Only present if audio file is focused, option disappears if folder is focused.
 
 
@@ -75,6 +80,7 @@ Items follow same formatting as audio files in Book view.
  - 
  - 
  - Clear
+
  Clears the recents list
 
 
@@ -98,6 +104,7 @@ Items follow same formatting as audio files in Book view.
  - 
  - 
  - Clear
+
  Clears the queue
 
 
@@ -134,10 +141,15 @@ Rewind and Fast-forward indicators with numbers associated with each per setting
 ### Options menu
 
  - Controls
+
  Opens the Controls modal
+
  - Play/Pause (contextual if file is playing)
+
  Plays and pauses the audio
+
  - Sleep
+
  Opens the Sleep modal
 
 ### Modals
@@ -178,6 +190,9 @@ Current folders to be used as sources are shown in a list.
 ### Options menu
 
 - Add
+
   Opens folder picker dialog. Selecting a folder adds it to the list of sources. Duplicate folders should be discarded with an error message "Already a source", and folders contained within existing source folders should be discarded with an error message "Already inside a source".
+
 - Remove
+
   Removes the focused source
