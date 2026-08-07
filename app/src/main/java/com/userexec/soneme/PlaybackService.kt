@@ -55,7 +55,7 @@ class PlaybackService : Service() {
         }
     }
 
-    private val sleepRunnable = Runnable {
+    private val sleepRunnable: Runnable = Runnable {
         val deadline = sleepDeadlineElapsed ?: return@Runnable
         if (SystemClock.elapsedRealtime() >= deadline) {
             sleepDeadlineElapsed = null
