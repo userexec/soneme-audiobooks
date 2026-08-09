@@ -4,7 +4,9 @@
 
 Soneme Audiobooks is a small, keypad-friendly Android audiobook player built for simple local playback without accounts, streaming services, or unnecessary dependencies.
 
-It is designed for the Sonim XP3Plus XP3900 and should also function on the XP3Plus 5G X320 if Sonim ever fixes the bug in DocumentsUI that prevents all X320s from *picking folders in folder picker dialogs*, though that's the least of the X320's problems. It may be useful for other Android devices with physical navigation keys, though you'd likely need to do some remapping and rebuild the apk. **Note it will not function on 99% of Android phones because it doesn't have touch controls for major functions of the interface. The Sonim flip phones it's designed for do not have touchscreens, and your phone probably doesn't have 3 softkeys mapped to Sonim's keycodes.**
+It is designed for the Sonim XP3Plus XP3900 and should also function on the XP3Plus 5G X320 if Sonim ever fixes the bug in DocumentsUI that prevents all X320s from *picking folders in folder picker dialogs*, though that's the least of the X320's problems. It may be useful for other Android devices with physical navigation keys, though you'd likely need to do some remapping and rebuild the apk.
+
+**Note it will not function on 99% of Android phones because it doesn't have touch controls for major functions of the interface. The Sonim flip phones it's designed for do not have touchscreens, and your phone probably doesn't have 3 softkeys mapped to Sonim's keycodes.**
 
 The interface can be operated almost entirely without opening your eyes. Playback, seeking, queue navigation, repeat mode, and sleep timer controls are all mapped to reasonably intuitive keypad keys. There is no more need to flashbang yourself at 2am to add an hour to your sleep timer.
 
