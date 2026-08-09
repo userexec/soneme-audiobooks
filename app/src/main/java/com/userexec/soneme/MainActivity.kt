@@ -9,16 +9,20 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.DocumentsContract
 import android.view.KeyEvent
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ListView
 import android.widget.SeekBar
@@ -32,7 +36,7 @@ class MainActivity : Activity() {
     private lateinit var scanner: LibraryScanner
     private lateinit var listView: ListView
     private lateinit var listAdapter: LibraryAdapter
-    private lateinit var tabBar: View
+    private lateinit var tabBar: ViewGroup
     private lateinit var playerScroll: View
     private lateinit var tabBooks: TextView
     private lateinit var tabRecents: TextView
@@ -63,6 +67,7 @@ class MainActivity : Activity() {
     private val folderStack = ArrayDeque<FolderLocation>()
     private var booksEntries: List<LibraryEntry> = emptyList()
     private var visibleSources: List<SourceFolder> = emptyList()
+    private var lastSoftKeyLabels: Triple<String, String, String>? = null
 
     private var wiperHoldRunnable: Runnable? = null
     private var wiperHoldActive = false
@@ -103,6 +108,11 @@ class MainActivity : Activity() {
         uiHandler.post(uiTicker)
     }
 
+    override fun onResume() {
+        super.onResume()
+        updateSonimSoftKeys(force = true)
+    }
+
     override fun onDestroy() {
         uiHandler.removeCallbacksAndMessages(null)
         executor.shutdownNow()
@@ -120,6 +130,9 @@ class MainActivity : Activity() {
         tabQueue = findViewById(R.id.tabQueue)
         tabPlayer = findViewById(R.id.tabPlayer)
         playerTitle = findViewById(R.id.playerTitle)
+        // Keep the title selected so an overflowing single-line title can marquee
+        // without becoming a D-pad focus target.
+        playerTitle.isSelected = true
         playerArtist = findViewById(R.id.playerArtist)
         elapsedText = findViewById(R.id.elapsedText)
         remainingText = findViewById(R.id.remainingText)
@@ -135,13 +148,34 @@ class MainActivity : Activity() {
         speedButton = findViewById(R.id.speedButton)
         listAdapter = LibraryAdapter(this)
         listView.adapter = listAdapter
+
+        // The strip is one logical focus target. Individual labels only show the active tab.
+        tabBar.isFocusable = true
+        tabBar.isFocusableInTouchMode = true
+        tabBar.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        tabBooks.isFocusable = false
+        tabRecents.isFocusable = false
+        tabQueue.isFocusable = false
+        tabPlayer.isFocusable = false
     }
 
     private fun bindUiActions() {
-        tabBooks.setOnClickListener { showView(AppView.BOOKS) }
-        tabRecents.setOnClickListener { showView(AppView.RECENTS) }
-        tabQueue.setOnClickListener { showView(AppView.QUEUE) }
-        tabPlayer.setOnClickListener { showView(AppView.PLAYER) }
+        tabBar.setOnFocusChangeListener { _, _ -> updateTabAppearance() }
+        listView.setOnFocusChangeListener { _, hasFocus ->
+            listAdapter.setListFocused(hasFocus)
+            updateSonimSoftKeys()
+        }
+        listView.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                listAdapter.setSelectedPosition(position)
+                updateSonimSoftKeys()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                listAdapter.setSelectedPosition(AdapterView.INVALID_POSITION)
+                updateSonimSoftKeys()
+            }
+        }
 
         listView.setOnItemClickListener { _, _, position, _ ->
             when (currentView) {
@@ -153,12 +187,7 @@ class MainActivity : Activity() {
             }
         }
 
-        playPauseButton.setOnClickListener {
-            ensureNotificationPermission()
-            if (service?.isPlaying() != true) ensureForegroundPlaybackService()
-            service?.togglePlayPause()
-            updatePlayerUi()
-        }
+        playPauseButton.setOnClickListener { togglePlayback() }
         previousButton.setOnClickListener { service?.previousQueueTitle() }
         nextButton.setOnClickListener { service?.nextQueueTitle() }
         rewindButton.setOnClickListener { service?.seekRelative(-(service?.rewindIntervalMs() ?: 10_000L)) }
@@ -186,7 +215,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showView(view: AppView, refreshBooks: Boolean = false) {
+    private fun showView(view: AppView, refreshBooks: Boolean = false, preserveTabFocus: Boolean = false) {
         currentView = view
         tabBar.visibility = if (view == AppView.SOURCES) View.GONE else View.VISIBLE
         listView.visibility = if (view == AppView.PLAYER) View.GONE else View.VISIBLE
@@ -209,7 +238,8 @@ class MainActivity : Activity() {
             }
             AppView.SOURCES -> showSources()
         }
-        invalidateOptionsMenu()
+        if (preserveTabFocus && view != AppView.SOURCES) tabBar.requestFocus()
+        updateSonimSoftKeys()
     }
 
     private fun updateTabAppearance() {
@@ -217,6 +247,7 @@ class MainActivity : Activity() {
         val inactive = Color.rgb(217, 222, 227)
         val activeText = Color.WHITE
         val inactiveText = Color.rgb(26, 26, 26)
+        val tabStripFocused = tabBar.hasFocus()
         val pairs = listOf(
             tabBooks to AppView.BOOKS,
             tabRecents to AppView.RECENTS,
@@ -225,13 +256,19 @@ class MainActivity : Activity() {
         )
         pairs.forEach { (tab, view) ->
             val selected = currentView == view
-            tab.setBackgroundColor(if (selected) active else inactive)
+            tab.background = GradientDrawable().apply {
+                setColor(if (selected) active else inactive)
+                if (selected && tabStripFocused) setStroke(dp(2), Color.WHITE)
+            }
             tab.setTextColor(if (selected) activeText else inactiveText)
         }
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+
     private fun loadBooksAsync() {
         listAdapter.replace(emptyList())
+        updateSonimSoftKeys()
         executor.execute {
             try {
                 val entries = if (folderStack.isEmpty()) scanner.scanTopLevel() else scanner.scanFolder(folderStack.last())
@@ -250,9 +287,22 @@ class MainActivity : Activity() {
     }
 
     private fun showList(entries: List<LibraryEntry>) {
+        val keepTabFocus = tabBar.visibility == View.VISIBLE && tabBar.hasFocus()
         listAdapter.replace(entries)
-        listView.requestFocus()
-        if (entries.isNotEmpty()) listView.setSelection(0)
+        if (!keepTabFocus) {
+            listView.requestFocus()
+            listAdapter.setListFocused(true)
+        } else {
+            listAdapter.setListFocused(false)
+        }
+        if (entries.isNotEmpty()) {
+            listView.setSelection(0)
+            listAdapter.setSelectedPosition(0)
+        } else {
+            listAdapter.setSelectedPosition(AdapterView.INVALID_POSITION)
+        }
+        if (keepTabFocus) tabBar.requestFocus()
+        updateSonimSoftKeys()
     }
 
     private fun openBookEntry(entry: LibraryEntry?) {
@@ -382,7 +432,10 @@ class MainActivity : Activity() {
     private fun updatePlayerUi() {
         val playback = service
         val record = playback?.currentRecord()
-        playerTitle.text = record?.title ?: "No title loaded"
+        val title = record?.title ?: "No title loaded"
+        if (playerTitle.text.toString() != title) {
+            playerTitle.text = title
+        }
         playerArtist.text = record?.artist ?: ""
 
         val duration = playback?.durationMs() ?: record?.durationMs ?: 0L
@@ -411,6 +464,7 @@ class MainActivity : Activity() {
         speedButton.text = formatSpeed(playback?.playbackSpeed() ?: 1f)
         val sleepRemaining = playback?.sleepRemainingMs() ?: 0L
         sleepButton.text = if (sleepRemaining <= 0) "Sleep Off" else "Sleep ${formatSleep(sleepRemaining)}"
+        updateSonimSoftKeys()
     }
 
     private fun formatSleep(ms: Long): String {
@@ -423,12 +477,42 @@ class MainActivity : Activity() {
     private fun formatSpeed(speed: Float): String = if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed}x"
 
     private fun showSleepDialog() {
-        val labels = arrayOf("Off", "10 minutes", "30 minutes", "1 hour", "2 hours", "3 hours", "4 hours", "8 hours", "12 hours")
-        val minutes = intArrayOf(0, 10, 30, 60, 120, 180, 240, 480, 720)
+        val playback = service
+        val resumeAvailable = (playback?.lastSleepSetPositionMs() ?: -1L) >= 0L
+        val labels = arrayOf(
+            "Off",
+            "Resume at last timer set",
+            "10 minutes",
+            "30 minutes",
+            "1 hour",
+            "2 hours",
+            "3 hours",
+            "4 hours",
+            "8 hours",
+            "12 hours"
+        )
+        val minutes = intArrayOf(10, 30, 60, 120, 180, 240, 480, 720)
+        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, labels) {
+            override fun areAllItemsEnabled(): Boolean = false
+
+            override fun isEnabled(position: Int): Boolean = position != 1 || resumeAvailable
+
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val enabled = isEnabled(position)
+                return super.getView(position, convertView, parent).apply {
+                    isEnabled = enabled
+                    alpha = if (enabled) 1f else 0.4f
+                }
+            }
+        }
         AlertDialog.Builder(this)
             .setTitle("Sleep")
-            .setItems(labels) { dialog, which ->
-                service?.setSleepMinutes(minutes[which])
+            .setAdapter(adapter) { dialog, which ->
+                when (which) {
+                    0 -> playback?.setSleepMinutes(0)
+                    1 -> playback?.resumeAtLastSleepSetPosition()
+                    else -> playback?.setSleepMinutes(minutes[which - 2])
+                }
                 dialog.dismiss()
                 updatePlayerUi()
             }
@@ -491,57 +575,85 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Controls").setItems(controls, null).show()
     }
 
-    private fun showOptionsMenuForHardwareKey() {
-        invalidateOptionsMenu()
-        openOptionsMenu()
+    private fun togglePlayback() {
+        ensureNotificationPermission()
+        if (service?.isPlaying() != true) ensureForegroundPlaybackService()
+        service?.togglePlayPause()
+        updatePlayerUi()
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean = true
-
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.clear()
-        when (currentView) {
-            AppView.BOOKS -> {
-                menu.add(0, MENU_SOURCES, 0, "Sources")
-                menu.add(0, MENU_REFRESH, 1, "Refresh")
-                val entry = listAdapter.item(listView.selectedItemPosition)
-                if (entry != null && !entry.isFolder) menu.add(0, MENU_QUEUE, 2, "Queue")
-            }
-            AppView.RECENTS -> menu.add(0, MENU_CLEAR_RECENTS, 0, "Clear")
-            AppView.QUEUE -> menu.add(0, MENU_CLEAR_QUEUE, 0, "Clear")
-            AppView.PLAYER -> {
-                menu.add(0, MENU_CONTROLS, 0, "Controls")
-                menu.add(0, MENU_PLAY_PAUSE, 1, if (service?.isPlaying() == true) "Pause" else "Play")
-                menu.add(0, MENU_SLEEP, 2, "Sleep")
-            }
-            AppView.SOURCES -> {
-                menu.add(0, MENU_ADD_SOURCE, 0, "Add")
-                if (visibleSources.isNotEmpty()) menu.add(0, MENU_REMOVE_SOURCE, 1, "Remove")
-            }
-        }
-        return true
+    private fun selectedAudioEntry(): LibraryEntry? {
+        if (!listView.hasFocus()) return null
+        return listAdapter.item(listView.selectedItemPosition)?.takeIf { !it.isFolder && it.uri != null }
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            MENU_SOURCES -> showView(AppView.SOURCES)
-            MENU_REFRESH -> { booksEntries = emptyList(); loadBooksAsync() }
-            MENU_QUEUE -> queueSelectedBook()
-            MENU_CLEAR_RECENTS -> { db.clearRecents(); showView(AppView.RECENTS) }
-            MENU_CLEAR_QUEUE -> { db.clearQueue(); showView(AppView.QUEUE) }
-            MENU_CONTROLS -> showControlsDialog()
-            MENU_PLAY_PAUSE -> service?.togglePlayPause()
-            MENU_SLEEP -> showSleepDialog()
-            MENU_ADD_SOURCE -> addSource()
-            MENU_REMOVE_SOURCE -> removeSelectedSource()
-            else -> return super.onOptionsItemSelected(item)
+    private fun selectedSource(): SourceFolder? {
+        if (!listView.hasFocus()) return null
+        return visibleSources.getOrNull(listView.selectedItemPosition)
+    }
+
+    private fun softKeyLabels(): Triple<String, String, String> = when (currentView) {
+        AppView.BOOKS -> Triple("Sources", "Refresh", if (selectedAudioEntry() != null) "Queue" else "")
+        AppView.RECENTS -> Triple("", "", "Clear")
+        AppView.QUEUE -> Triple("", "", "Clear")
+        AppView.PLAYER -> Triple("Controls", if (service?.isPlaying() == true) "Pause" else "Play", "Sleep")
+        AppView.SOURCES -> Triple("Add", if (selectedSource() != null) "Remove" else "", "")
+    }
+
+    private fun updateSonimSoftKeys(force: Boolean = false) {
+        if (!::db.isInitialized) return
+        val labels = softKeyLabels()
+        if (!force && labels == lastSoftKeyLabels) return
+        lastSoftKeyLabels = labels
+        sendBroadcast(Intent(SONIM_SOFTKEY_ACTION).apply {
+            putExtra("left", labels.first)
+            putExtra("center", labels.second)
+            putExtra("right", labels.third)
+            putExtra("from_package", packageName)
+        })
+    }
+
+    private fun handleSoftKey(slot: SoftKeySlot) {
+        when (slot) {
+            SoftKeySlot.LEFT -> when (currentView) {
+                AppView.BOOKS -> showView(AppView.SOURCES)
+                AppView.PLAYER -> showControlsDialog()
+                AppView.SOURCES -> addSource()
+                else -> Unit
+            }
+            SoftKeySlot.CENTER -> when (currentView) {
+                AppView.BOOKS -> {
+                    booksEntries = emptyList()
+                    loadBooksAsync()
+                }
+                AppView.PLAYER -> togglePlayback()
+                AppView.SOURCES -> if (selectedSource() != null) removeSelectedSource()
+                else -> Unit
+            }
+            SoftKeySlot.RIGHT -> when (currentView) {
+                AppView.BOOKS -> if (selectedAudioEntry() != null) queueSelectedBook()
+                AppView.RECENTS -> { db.clearRecents(); showView(AppView.RECENTS) }
+                AppView.QUEUE -> { db.clearQueue(); showView(AppView.QUEUE) }
+                AppView.PLAYER -> showSleepDialog()
+                else -> Unit
+            }
         }
-        return true
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_MENU || event.keyCode == KeyEvent.KEYCODE_SOFT_LEFT) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) showOptionsMenuForHardwareKey()
+        val keyName = KeyEvent.keyCodeToString(event.keyCode)
+        if (keyName == "KEYCODE_MULTIFUNC_LEFT") return true
+
+        val softKey = when {
+            // XP3900 reports KEYCODE_MENU directly. X320 emits MULTIFUNC_LEFT plus a
+            // synthesized KEYCODE_MENU, so only consume MENU to avoid a double action.
+            event.keyCode == KeyEvent.KEYCODE_MENU || event.keyCode == KeyEvent.KEYCODE_SOFT_LEFT -> SoftKeySlot.LEFT
+            keyName == "KEYCODE_MULTIFUNC_CENTER" -> SoftKeySlot.CENTER
+            keyName == "KEYCODE_MULTIFUNC_RIGHT" -> SoftKeySlot.RIGHT
+            else -> null
+        }
+        if (softKey != null) {
+            if (event.action == KeyEvent.ACTION_UP) handleSoftKey(softKey)
             return true
         }
 
@@ -571,23 +683,51 @@ class MainActivity : Activity() {
         }
 
         if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return false
-        when (event.keyCode) {
-            KeyEvent.KEYCODE_1 -> service?.seekRelative(-10_000L)
-            KeyEvent.KEYCODE_2 -> service?.previousQueueTitle()
-            KeyEvent.KEYCODE_3 -> service?.seekRelative(10_000L)
-            KeyEvent.KEYCODE_4 -> service?.seekRelative(-60_000L)
-            KeyEvent.KEYCODE_5 -> service?.nextQueueTitle()
-            KeyEvent.KEYCODE_6 -> service?.seekRelative(60_000L)
-            KeyEvent.KEYCODE_7 -> service?.seekRelative(-600_000L)
-            KeyEvent.KEYCODE_8 -> service?.cycleRepeat()
-            KeyEvent.KEYCODE_9 -> service?.seekRelative(600_000L)
-            KeyEvent.KEYCODE_STAR -> service?.seekRelative(-3_600_000L)
-            KeyEvent.KEYCODE_0 -> service?.addSleepMinutes(10)
-            KeyEvent.KEYCODE_POUND -> service?.seekRelative(3_600_000L)
+        val focusTarget = when (event.keyCode) {
+            KeyEvent.KEYCODE_1 -> { service?.seekRelative(-10_000L); rewindButton }
+            KeyEvent.KEYCODE_2 -> { service?.previousQueueTitle(); previousButton }
+            KeyEvent.KEYCODE_3 -> { service?.seekRelative(10_000L); forwardButton }
+            KeyEvent.KEYCODE_4 -> { service?.seekRelative(-60_000L); rewindButton }
+            KeyEvent.KEYCODE_5 -> { service?.nextQueueTitle(); nextButton }
+            KeyEvent.KEYCODE_6 -> { service?.seekRelative(60_000L); forwardButton }
+            KeyEvent.KEYCODE_7 -> { service?.seekRelative(-600_000L); rewindButton }
+            KeyEvent.KEYCODE_8 -> {
+                service?.cycleRepeat()?.let(::vibrateRepeatMode)
+                repeatButton
+            }
+            KeyEvent.KEYCODE_9 -> { service?.seekRelative(600_000L); forwardButton }
+            KeyEvent.KEYCODE_STAR -> { service?.seekRelative(-3_600_000L); rewindButton }
+            KeyEvent.KEYCODE_0 -> {
+                service?.addSleepMinutes(10)
+                vibrate(longArrayOf(0L, 80L))
+                sleepButton
+            }
+            KeyEvent.KEYCODE_POUND -> { service?.seekRelative(3_600_000L); forwardButton }
             else -> return false
         }
         updatePlayerUi()
+        if (focusTarget.isEnabled && focusTarget.isFocusable) focusTarget.requestFocus()
         return true
+    }
+
+    private fun vibrateRepeatMode(mode: RepeatMode) {
+        val pattern = when (mode) {
+            RepeatMode.OFF -> longArrayOf(0L, 300L)
+            RepeatMode.ONE -> longArrayOf(0L, 300L, 150L, 300L)
+            RepeatMode.ALL -> longArrayOf(
+                0L, 80L, 80L, 80L, 80L, 80L,
+                250L,
+                80L, 80L, 80L, 80L, 80L
+            )
+        }
+        vibrate(pattern)
+    }
+
+    private fun vibrate(pattern: LongArray) {
+        val vibrator = getSystemService(Vibrator::class.java) ?: return
+        if (vibrator.hasVibrator()) {
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+        }
     }
 
     private fun handleWiperKey(event: KeyEvent): Boolean {
@@ -628,14 +768,14 @@ class MainActivity : Activity() {
         return true
     }
 
-    private fun isTabFocused(): Boolean = tabBooks.hasFocus() || tabRecents.hasFocus() || tabQueue.hasFocus() || tabPlayer.hasFocus()
+    private fun isTabFocused(): Boolean = tabBar.hasFocus()
 
     private fun switchTab(direction: Int) {
         val tabs = listOf(AppView.BOOKS, AppView.RECENTS, AppView.QUEUE, AppView.PLAYER)
         val normalized = if (currentView == AppView.SOURCES) AppView.BOOKS else currentView
         val index = tabs.indexOf(normalized)
         val target = (index + direction).coerceIn(0, tabs.lastIndex)
-        if (target != index) showView(tabs[target])
+        if (target != index) showView(tabs[target], preserveTabFocus = isTabFocused())
     }
 
     @Deprecated("Deprecated in Android; retained for target flip-phone navigation semantics")
@@ -645,6 +785,8 @@ class MainActivity : Activity() {
                 if (folderStack.isNotEmpty()) {
                     folderStack.removeLast()
                     loadBooksAsync()
+                } else {
+                    finish()
                 }
             }
             AppView.RECENTS -> showView(AppView.BOOKS)
@@ -664,18 +806,11 @@ class MainActivity : Activity() {
         }
     }
 
+    private enum class SoftKeySlot { LEFT, CENTER, RIGHT }
+
     companion object {
         private const val REQUEST_SOURCE = 40
         private const val REQUEST_NOTIFICATIONS = 41
-        private const val MENU_SOURCES = 100
-        private const val MENU_REFRESH = 101
-        private const val MENU_QUEUE = 102
-        private const val MENU_CLEAR_RECENTS = 103
-        private const val MENU_CLEAR_QUEUE = 104
-        private const val MENU_CONTROLS = 105
-        private const val MENU_PLAY_PAUSE = 106
-        private const val MENU_SLEEP = 107
-        private const val MENU_ADD_SOURCE = 108
-        private const val MENU_REMOVE_SOURCE = 109
+        private const val SONIM_SOFTKEY_ACTION = "android.intent.action.CHANGE_NAV_BAR"
     }
 }

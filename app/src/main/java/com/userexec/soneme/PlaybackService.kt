@@ -44,6 +44,7 @@ class PlaybackService : Service() {
     private var pendingStartMs = 0L
     private var resumeAfterFocusGain = false
     private var sleepDeadlineElapsed: Long? = null
+    private var sleepSetUri: String? = null
     private var foregroundActive = false
 
     private val progressRunnable = object : Runnable {
@@ -59,6 +60,7 @@ class PlaybackService : Service() {
         val deadline = sleepDeadlineElapsed ?: return@Runnable
         if (SystemClock.elapsedRealtime() >= deadline) {
             sleepDeadlineElapsed = null
+            sleepSetUri = null
             pauseInternal(abandonFocus = true)
             persistProgress(markRecent = true)
         } else {
@@ -105,7 +107,8 @@ class PlaybackService : Service() {
     fun load(uri: String, resumeSaved: Boolean = true, autoplay: Boolean = false) {
         if (currentUri == uri && prepared) {
             if (!resumeSaved) seekTo(0)
-            if (autoplay) play()
+            pendingAutoplay = autoplay
+            if (autoplay) play() else if (isPlaying()) pause()
             return
         }
 
@@ -246,14 +249,14 @@ class PlaybackService : Service() {
         updatePlaybackState()
     }
 
-    fun cycleRepeat() {
-        setRepeatMode(
-            when (repeatMode()) {
-                RepeatMode.OFF -> RepeatMode.ONE
-                RepeatMode.ONE -> RepeatMode.ALL
-                RepeatMode.ALL -> RepeatMode.OFF
-            }
-        )
+    fun cycleRepeat(): RepeatMode {
+        val mode = when (repeatMode()) {
+            RepeatMode.OFF -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.OFF
+        }
+        setRepeatMode(mode)
+        return mode
     }
 
     fun playbackSpeed(): Float = prefs.getFloat(KEY_SPEED, 1f)
@@ -277,15 +280,26 @@ class PlaybackService : Service() {
     fun setForwardIntervalMs(ms: Long) { prefs.edit().putLong(KEY_FORWARD_INTERVAL, ms).apply() }
 
     fun setSleepMinutes(minutes: Int) {
+        val hadActiveTimer = sleepDeadlineElapsed != null
         handler.removeCallbacks(sleepRunnable)
-        sleepDeadlineElapsed = if (minutes <= 0) null else SystemClock.elapsedRealtime() + minutes * 60_000L
-        if (sleepDeadlineElapsed != null) handler.post(sleepRunnable)
+        if (minutes <= 0) {
+            sleepDeadlineElapsed = null
+            if (hadActiveTimer) clearActiveSleepSetPosition()
+            sleepSetUri = null
+            return
+        }
+
+        sleepDeadlineElapsed = SystemClock.elapsedRealtime() + minutes * 60_000L
+        saveCurrentSleepSetPosition()
+        handler.post(sleepRunnable)
     }
 
     fun addSleepMinutes(minutes: Int) {
+        if (minutes <= 0) return
         val now = SystemClock.elapsedRealtime()
         val base = sleepDeadlineElapsed?.takeIf { it > now } ?: now
         sleepDeadlineElapsed = base + minutes * 60_000L
+        saveCurrentSleepSetPosition()
         handler.removeCallbacks(sleepRunnable)
         handler.post(sleepRunnable)
     }
@@ -293,6 +307,39 @@ class PlaybackService : Service() {
     fun sleepRemainingMs(): Long {
         val deadline = sleepDeadlineElapsed ?: return 0L
         return (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+    }
+
+    fun lastSleepSetPositionMs(): Long = currentRecord()?.sleepSetPositionMs ?: -1L
+
+    fun resumeAtLastSleepSetPosition(): Boolean {
+        val uri = currentUri ?: return false
+        val record = db.getAudio(uri) ?: return false
+        val savedPosition = record.sleepSetPositionMs
+        if (savedPosition < 0) return false
+
+        handler.removeCallbacks(sleepRunnable)
+        sleepDeadlineElapsed = null
+        if (sleepSetUri == uri) sleepSetUri = null
+        db.setSleepSetPosition(uri, -1L)
+        if (prepared) {
+            seekTo(savedPosition)
+        } else {
+            pendingStartMs = savedPosition
+            if (record.durationMs > 0) {
+                db.saveProgress(uri, savedPosition, record.durationMs, markRecent = true)
+            }
+        }
+        return true
+    }
+
+    private fun saveCurrentSleepSetPosition() {
+        val uri = currentUri ?: return
+        db.setSleepSetPosition(uri, positionMs().coerceAtLeast(0L))
+        sleepSetUri = uri
+    }
+
+    private fun clearActiveSleepSetPosition() {
+        sleepSetUri?.let { db.setSleepSetPosition(it, -1L) }
     }
 
     private fun persistProgress(

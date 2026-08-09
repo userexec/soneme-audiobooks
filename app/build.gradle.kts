@@ -12,10 +12,22 @@ android {
         minSdk = 30
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
+    }
+
+	signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("SONEME_KEYSTORE"))
+            storePassword = System.getenv("SONEME_STORE_PASSWORD")
+            keyAlias = "soneme"
+            keyPassword = System.getenv("SONEME_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
+		getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

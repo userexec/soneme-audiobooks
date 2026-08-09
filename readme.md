@@ -35,7 +35,7 @@ On app startup:
  - Left and right buttons switch tabs
  - Up and down cycle through the list
  - Clicking a title clears the queue, adds the title to the queue, and opens it in Player view
- - Back button goes up a level if in a subfolder, no action if at top level
+ - Back button goes up a level if in a subfolder; at top level it exits the app and returns to the launcher
 
 ### Main content
 
@@ -133,7 +133,7 @@ Sleep timer remaining countdown in format h:m. Click on sleep timer opens sleep 
 Repeat icon that reflects current setting. Click on repeat icon opens repeat modal.
 Playback speed indicator that reflects current setting. Click on playback speed indicator opens playback speed modal. 
 Wiper indicator of current playing position. When wiper focused, clicking left button rewinds by interval setting, clicking right fast-forwards by interval setting. Holding left or right pauses the audio, repeats their action once per second until hold released, then returns to playing audio in the new position.
-Above wiper, time elapsed on left of wiper in format h:mm:ss. Time remaining on right of wiper in format h:mm:ss. Total track time and listening progress in center of wiper in format "1h 40m - 47%".
+Above wiper, time elapsed is shown on the left in format h:mm:ss, total track time and listening progress are centered in format "1h 40m - 47%", and time remaining is shown on the right in format h:mm:ss. All three appear on the same row.
 Play/pause indicator below wiper.
 Previous and Next track buttons to jump to titles in queue. Grayed out if only one title is in queue.
 Rewind and Fast-forward indicators with numbers associated with each per settings in Rewind Interval modal and Fast-forward Interval modal. Settings are expressed here as 10s, 1m, 10m, and 1h to save space. Clicking them rewinds or fast-forwards by the selected interval. Holding them opens their respective modal to adjust their interval setting.

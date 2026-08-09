@@ -32,5 +32,6 @@ data class AudioRecord(
     val artist: String,
     val durationMs: Long,
     val positionMs: Long,
-    val lastPlayed: Long
+    val lastPlayed: Long,
+    val sleepSetPositionMs: Long = -1L
 )

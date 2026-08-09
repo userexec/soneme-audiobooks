@@ -56,7 +56,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:paddingLeft="12dp"
+                android:paddingTop="10dp"
+                android:paddingRight="12dp"
+                android:paddingBottom="12dp">
 
                 <TextView
                     android:id="@+id/playerTitle"
@@ -66,13 +69,16 @@
                     android:textColor="#111111"
                     android:textSize="20sp"
                     android:textStyle="bold"
-                    android:maxLines="2" />
+                    android:singleLine="true"
+                    android:ellipsize="marquee"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:scrollHorizontally="true" />
 
                 <TextView
                     android:id="@+id/playerArtist"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
+                    android:layout_marginBottom="8dp"
                     android:text=""
                     android:textColor="#555555"
                     android:textSize="14sp" />
@@ -113,8 +119,9 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="horizontal">
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
                     <TextView
                         android:id="@+id/elapsedText"
                         android:layout_width="0dp"
@@ -122,6 +129,15 @@
                         android:layout_weight="1"
                         android:text="0:00:00"
                         android:textColor="#222222" />
+                    <TextView
+                        android:id="@+id/progressSummary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:maxLines="1"
+                        android:text="0m - 0%"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
                     <TextView
                         android:id="@+id/remainingText"
                         android:layout_width="0dp"
@@ -140,20 +156,11 @@
                     android:focusable="true"
                     android:focusableInTouchMode="true" />
 
-                <TextView
-                    android:id="@+id/progressSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:text="0m - 0%"
-                    android:textColor="#333333"
-                    android:textSize="14sp" />
-
                 <Button
                     android:id="@+id/playPauseButton"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="0dp"
                     android:text="Play"
                     android:textAllCaps="false"
                     android:textSize="18sp" />
@@ -161,6 +168,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="-4dp"
                     android:orientation="horizontal">
                     <Button
                         android:id="@+id/previousButton"
@@ -181,6 +189,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="-4dp"
                     android:orientation="horizontal">
                     <Button
                         android:id="@+id/rewindButton"
