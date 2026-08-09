@@ -10,6 +10,8 @@ The interface can be operated almost entirely without opening your eyes. Playbac
 
 Note this app is primarily designed for audiobooks that are a single MP3 file. No chapters, no character lists, no funny business. I made it for myself, and I use an XP3900 in 2026, so this shouldn't be all that surprising. If you have legitimate audiobooks in fancy formats, go use a real audiobook player.
 
+![Player interface](https://github.com/userexec/soneme-audiobooks/blob/master/screenshot-player.png?raw=true)  ![Books interface](https://github.com/userexec/soneme-audiobooks/blob/master/screenshot-books.png?raw=true)
+
 ## Features
 
 * Local MP3 audiobook playback
