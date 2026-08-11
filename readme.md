@@ -1,6 +1,6 @@
 # Soneme Audiobooks
 
-![Soneme Audiobooks Icon](https://github.com/userexec/soneme-audiobooks/blob/master/soneme-icon-512.png?raw=true)
+![Soneme Audiobooks Icon](https://github.com/userexec/soneme-audiobooks/blob/master/soneme-audiobooks-icon.png?raw=true)
 
 Soneme Audiobooks is a small, keypad-friendly Android audiobook player built for simple local playback without accounts, streaming services, or unnecessary dependencies.
 
